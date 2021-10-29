@@ -177,9 +177,9 @@ def get_vocabs(session, vocab_list_id, start, count, search_size=100):
 
             words[word] = meaning
 
-            if vocab_count >= count + start: break
+            if vocab_count >= count + start - 1: break
 
-        if vocab_count >= count + start : break
+        if vocab_count >= count + start - 1: break
 
         page += 1
 
