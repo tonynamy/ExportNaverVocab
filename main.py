@@ -6,6 +6,7 @@ import csv
 import getpass
 
 import json
+import time
 
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
@@ -137,7 +138,7 @@ def get_vocab_lists(session, page, page_size=100) :
 
 def get_vocabs(session, vocab_list_id, start, count, search_size=100):
 
-    words = {}
+    words = []
 
     fisrt_page = start//100
     if fisrt_page == 0: fisrt_page = 1
@@ -165,6 +166,8 @@ def get_vocabs(session, vocab_list_id, start, count, search_size=100):
         vocabs = result['data']['m_items']
         cursor = result['data']['next_cursor']
 
+        vocab_success_count = 0
+
         for vocab in vocabs :
 
             vocab_count += 1
@@ -175,11 +178,17 @@ def get_vocabs(session, vocab_list_id, start, count, search_size=100):
 
             if word == None or meaning == None : continue
 
-            words[word] = meaning
+            vocab_success_count += 1
+
+            words.append((word, meaning))
 
             if vocab_count >= count + start - 1: break
 
         if vocab_count >= count + start - 1: break
+
+        print(f"{page} 페이지 파싱 결과 : {vocab_success_count}/{search_size} 개 불러옴")
+
+        time.sleep(1)
 
         page += 1
 
@@ -268,13 +277,13 @@ def process_vocab(vocab) :
 
         return None, None
 
-def export_to_file(file_name, dict) :
+def export_to_file(file_name, vocabs) :
 
     with open(file_name, 'w', newline='', encoding='utf-8-sig') as f:
 
         wr = csv.writer(f)
 
-        for word, meaning in dict.items():
+        for word, meaning in vocabs:
             wr.writerow([word, meaning])
 
         f.close()
@@ -348,8 +357,9 @@ def main() :
     print()
     print(f"선택한 단어장 : {vocab_list_items[vocab_lists_select-1][0]}  ({vocab_list_items[vocab_lists_select-1][1][1]}개 단어)")
 
-    vocab_start_count = int(input("불러오기 시작할 단어의 개수를 입력하세요 : "))
+    vocab_start_count = int(input("불러오기 시작할 단어의 수를 입력하세요 : "))
     vocab_count = int(input("불러올 단어 개수를 입력하세요 : "))
+    vocab_unit = int(input("한 번에 저장할 단어 개수를 입력하세요 : "))
 
     vocab_lists_id = vocab_list_items[vocab_lists_select-1][1][0]
 
@@ -357,10 +367,20 @@ def main() :
     print()
 
     print(f"{vocab_list_items[vocab_lists_select - 1][0]} 단어장에서 {vocab_start_count}번째 단어부터 {len(vocabs)}개를 불러왔습니다.")
-    file_name = input("저장할 파일 이름을 입력하세요 (CSV) : ")
-    export_to_file(file_name, vocabs)
+    file_original_name = input("저장할 파일 이름을 입력하세요 : ")
 
-    print(f"{file_name}에 {len(vocabs)}개의 단어를 저장했습니다.")
+    for i in range(0, len(vocabs), vocab_unit) :
+
+        file_name = f"{file_original_name}-{i//vocab_unit + 1}.csv"
+
+        if i+vocab_unit > len(vocabs) : end_index = len(vocabs)
+        else : end_index = i+vocab_unit
+
+        vocabs_by_unit = vocabs[i:end_index]
+
+        export_to_file(file_name, vocabs_by_unit)
+
+        print(f"{file_name}에 {end_index-i}개의 단어를 저장했습니다.")
 
 
 main()
