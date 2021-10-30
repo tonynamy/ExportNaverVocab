@@ -14,7 +14,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 
-from urllib.parse import unquote
+from urllib.parse import unquote, quote_plus
 
 import requests
 
@@ -161,10 +161,14 @@ def get_vocabs(session, vocab_list_id, start, count, search_size=100):
         result = json.loads(session.get(link).text)
 
         if result['meta']['status'] != 1:
-            raise Exception("단어장 목록 받아오기 실패")
+            print(f"{page} 페이지 파싱 결과 : 단어장 불러오기 실패")
+            print(result)
+            time.sleep(1)
+            page += 1
+            continue
 
         vocabs = result['data']['m_items']
-        cursor = result['data']['next_cursor']
+        cursor = quote_plus(result['data']['next_cursor'])
 
         vocab_success_count = 0
 
@@ -276,6 +280,8 @@ def process_vocab(vocab) :
     elif dic_type == "koja" : # 한일 사전, 지원 X
 
         return None, None
+
+    return None, None
 
 def export_to_file(file_name, vocabs) :
 
