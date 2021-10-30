@@ -318,75 +318,83 @@ def main() :
 
     session = get_naver_login_session(username, password, session_save, session_load)
 
-    vocab_lists_page = 1
-    vocab_lists_select = 0
-    vocab_list_items = []
+    command = ""
 
-    while vocab_lists_select <= 0 :
+    while command != "q" :
 
-        vocab_lists = get_vocab_lists(session, vocab_lists_page)
+        vocab_lists_page = 1
+        vocab_lists_select = 0
+        vocab_list_items = []
 
-        vocab_list_items = list(vocab_lists.items())
+        while vocab_lists_select <= 0 :
+
+            vocab_lists = get_vocab_lists(session, vocab_lists_page)
+
+            vocab_list_items = list(vocab_lists.items())
+
+            print()
+
+            print(f"단어장 목록 {vocab_lists_page} 페이지")
+
+            print()
+
+            for idx, vocab_list_item in enumerate(vocab_list_items) :
+
+                print(f"{idx+1} : {vocab_list_item[0]} ({vocab_list_item[1][1]}개 단어)")
+
+            print()
+
+            vocab_lists_select = int(input("단어장을 선택하거나 전 페이지를 검색하려면 -1, 다음 페이지를 검색하려면 0을 입력하십시오 : "))
+
+            if vocab_lists_select == -1 :
+
+                if vocab_lists_page <= 1 :
+
+                    print()
+                    print("이미 첫 페이지입니다.")
+
+                    vocab_lists_page = 1
+
+                else :
+
+                    vocab_lists_page -= 1
+
+            elif vocab_lists_select == 0 :
+
+                vocab_lists_page += 1
+
+            else : break
 
         print()
+        print(f"선택한 단어장 : {vocab_list_items[vocab_lists_select-1][0]}  ({vocab_list_items[vocab_lists_select-1][1][1]}개 단어)")
 
-        print(f"단어장 목록 {vocab_lists_page} 페이지")
+        vocab_start_count = int(input("불러오기 시작할 단어의 수를 입력하세요 : "))
+        vocab_count = int(input("불러올 단어 개수를 입력하세요 : "))
+        vocab_unit = int(input("한 번에 저장할 단어 개수를 입력하세요 : "))
 
+        vocab_lists_id = vocab_list_items[vocab_lists_select-1][1][0]
+
+        vocabs = get_vocabs(session, vocab_lists_id, vocab_start_count, vocab_count)
         print()
 
-        for idx, vocab_list_item in enumerate(vocab_list_items) :
+        print(f"{vocab_list_items[vocab_lists_select - 1][0]} 단어장에서 {vocab_start_count}번째 단어부터 {len(vocabs)}개를 불러왔습니다.")
+        file_original_name = input("저장할 파일 이름을 입력하세요 : ")
 
-            print(f"{idx+1} : {vocab_list_item[0]} ({vocab_list_item[1][1]}개 단어)")
+        for i in range(0, len(vocabs), vocab_unit) :
 
-        print()
+            file_name = f"{file_original_name}-{i//vocab_unit + 1}.csv"
 
-        vocab_lists_select = int(input("단어장을 선택하거나 전 페이지를 검색하려면 -1, 다음 페이지를 검색하려면 0을 입력하십시오 : "))
+            if i+vocab_unit > len(vocabs) : end_index = len(vocabs)
+            else : end_index = i+vocab_unit
 
-        if vocab_lists_select == -1 :
+            vocabs_by_unit = vocabs[i:end_index]
 
-            if vocab_lists_page <= 1 :
+            export_to_file(file_name, vocabs_by_unit)
 
-                print("이미 첫 페이지입니다.")
+            print(f"{file_name}에 {end_index-i}개의 단어를 저장했습니다.")
 
-                vocab_lists_page = 1
-
-            else :
-
-                vocab_lists_page -= 1
-
-        elif vocab_lists_select == 0 :
-
-            vocab_lists_page += 1
-
-        else : break
-
-    print()
-    print(f"선택한 단어장 : {vocab_list_items[vocab_lists_select-1][0]}  ({vocab_list_items[vocab_lists_select-1][1][1]}개 단어)")
-
-    vocab_start_count = int(input("불러오기 시작할 단어의 수를 입력하세요 : "))
-    vocab_count = int(input("불러올 단어 개수를 입력하세요 : "))
-    vocab_unit = int(input("한 번에 저장할 단어 개수를 입력하세요 : "))
-
-    vocab_lists_id = vocab_list_items[vocab_lists_select-1][1][0]
-
-    vocabs = get_vocabs(session, vocab_lists_id, vocab_start_count, vocab_count)
-    print()
-
-    print(f"{vocab_list_items[vocab_lists_select - 1][0]} 단어장에서 {vocab_start_count}번째 단어부터 {len(vocabs)}개를 불러왔습니다.")
-    file_original_name = input("저장할 파일 이름을 입력하세요 : ")
-
-    for i in range(0, len(vocabs), vocab_unit) :
-
-        file_name = f"{file_original_name}-{i//vocab_unit + 1}.csv"
-
-        if i+vocab_unit > len(vocabs) : end_index = len(vocabs)
-        else : end_index = i+vocab_unit
-
-        vocabs_by_unit = vocabs[i:end_index]
-
-        export_to_file(file_name, vocabs_by_unit)
-
-        print(f"{file_name}에 {end_index-i}개의 단어를 저장했습니다.")
-
+        print("")
+        print("작업이 완료되었습니다.")
+        command = input("종료하려면 q를, 단어장 선택 화면으로 돌아가려면 q를 제외한 다른 키를 누르십시오.")
 
 main()
