@@ -285,14 +285,14 @@ def process_vocab(vocab) :
 
 def export_to_file(file_name, vocabs) :
 
-    with open(file_name, 'w', newline='', encoding='utf-8-sig') as f:
+        with open(file_name, 'w', newline='', encoding='utf-8-sig') as f:
 
-        wr = csv.writer(f)
+            wr = csv.writer(f)
 
-        for word, meaning in vocabs:
-            wr.writerow([word, meaning])
+            for word, meaning in vocabs:
+                wr.writerow([word, meaning])
 
-        f.close()
+            f.close()
 
 
 def main() :

@@ -1,2 +1,4 @@
 /session_info
 /chromedriver
+/__pycache__
+/build
