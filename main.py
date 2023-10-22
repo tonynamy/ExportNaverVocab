@@ -1,27 +1,56 @@
 import csv
+from pathlib import Path
+from typing import NamedTuple
+
 import inquirer
+from tqdm import tqdm
 
 from naver_session import NaverSession
 from naver_vocab import NaverVocab
 from naver_vocab_book import NaverVocabBook
 
 
-def inquire_is_session_load() -> bool:
-    questions = [inquirer.Confirm("is_session_load", message="세션을 불러오시겠습니까?")]
+def inquire_bool(message: str) -> bool:
+    questions = [inquirer.Confirm("temp", message=message)]
     answers = inquirer.prompt(questions)
-    return answers["is_session_load"]
+    return answers["temp"]
 
 
-def inquire_is_session_save() -> bool:
-    questions = [inquirer.Confirm("is_session_save", message="세션을 저장하시겠습니까?")]
+def inquire_is_session_load():
+    return inquire_bool("세션을 불러오시겠습니까?")
+
+
+def inquire_is_session_save():
+    return inquire_bool("세션을 저장하시겠습니까?")
+
+
+def inquire_quit():
+    return inquire_bool("종료하시겠습니까?")
+
+
+def inquire_is_download_pron_files():
+    return inquire_bool("발음 파일을 다운로드하시겠습니까? (CSV의 세번째 열에 저장된 파일의 경로가 추가됩니다(ANKI에서 사용))")
+
+
+def inquire_path(message: str) -> Path:
+    questions = [inquirer.Path("path", message=message)]
     answers = inquirer.prompt(questions)
-    return answers["is_session_save"]
+    path = Path(answers["path"])
+    if not path.exists():
+        path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
-def inquire_sesion_file_path() -> str:
-    questions = [inquirer.Path("session_file_path", message="세션 파일 경로를 입력하세요")]
-    answers = inquirer.prompt(questions)
-    return answers["session_file_path"]
+def inquire_sesion_file_path():
+    return inquire_path("세션 파일 경로를 입력하세요")
+
+
+def inquire_csv_file_path():
+    return inquire_path("CSV 파일 경로를 입력하세요")
+
+
+def inquire_pron_folder_path():
+    return inquire_path("발음 파일 폴더 경로를 입력하세요")
 
 
 def inquire_username_and_password() -> tuple[str, str]:
@@ -60,18 +89,6 @@ def inquire_book_id(books: list[NaverVocabBook]) -> str:
     return answers["book_id"]
 
 
-def inquire_csv_file_path() -> str:
-    questions = [inquirer.Path("csv_file_path", message="CSV 파일 경로를 입력하세요")]
-    answers = inquirer.prompt(questions)
-    return answers["csv_file_path"]
-
-
-def inquire_quit() -> bool:
-    questions = [inquirer.Confirm("quit", message="종료하시겠습니까?")]
-    answers = inquirer.prompt(questions)
-    return answers["quit"]
-
-
 def get_session():
     try:
         if inquire_is_session_load():
@@ -89,6 +106,20 @@ def get_session():
     session.save(session_file)
 
     return session
+
+
+class PronFileTuple(NamedTuple):
+    vocab_id: str
+    path: Path
+    link: str
+
+
+def _download_pron_files(session: NaverSession, file_tuples: list[PronFileTuple]):
+    download_tqdm = tqdm(file_tuples)
+    download_tqdm.set_description("발음 파일을 다운로드하는 중")
+    for file_tuple in download_tqdm:
+        with open(file_tuple.path, "wb") as f:
+            f.write(session.session.get(file_tuple.link).content)
 
 
 def _get_front_and_back(
@@ -118,16 +149,48 @@ def main():
         selected_book = NaverVocabBook.get_book_from_id(session, book_id, book_type)
         selected_book.load_vocabs(session)
 
+        vocabs = selected_book.vocabs
+        assert vocabs
+
         csv_file_path = inquire_csv_file_path()
+        extra_columns: dict[str, tuple[str, ...]] = {
+            vocab.id: tuple() for vocab in vocabs
+        }
+
+        if inquire_is_download_pron_files():
+
+            def _add_file_prefix(path: str):
+                return f"{csv_file_path.stem}-{path}"
+
+            folder_path = inquire_pron_folder_path()
+
+            file_tuple_tqdm = tqdm(vocabs)
+            file_tuple_tqdm.set_description("발음 파일 링크를 가져오는 중")
+            file_tuples = [
+                PronFileTuple(
+                    vocab_id=vocab.id,
+                    path=folder_path.joinpath(Path(_add_file_prefix(file_name))),
+                    link=link,
+                )
+                for vocab in file_tuple_tqdm
+                if (link := vocab.get_pron_file_link(session))
+                and (file_name := vocab.get_pron_file_name())
+            ]
+
+            _download_pron_files(session, file_tuples)
+
+            for file_tuple in file_tuples:
+                extra_columns[file_tuple.vocab_id] += (
+                    f"[sound:{file_tuple.path.name}]",
+                )
 
         with open(csv_file_path, "w", encoding="utf8") as f:
-            vocabs = selected_book.vocabs
-            assert vocabs
-
             wr = csv.writer(f)
 
             for vocab in vocabs:
-                wr.writerow(_get_front_and_back(book_type, vocab))
+                wr.writerow(
+                    _get_front_and_back(book_type, vocab) + extra_columns[vocab.id]
+                )
 
         print(f"{len(vocabs)}개 단어를 {csv_file_path}에 저장했습니다.")
 

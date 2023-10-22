@@ -33,10 +33,25 @@ SEARCH_SIZE = 100
 
 @dataclass
 class NaverVocab:
+    id: str
     word: str
     meaning: str
     pron: str
+    pron_file: str | None
     remarks: str | None = None
+
+    def get_pron_file_name(self):
+        return self.pron_file.split("/")[-1] if self.pron_file else None
+
+    def get_pron_file_link(self, naver_session: NaverSession):
+        if self.pron_file is None:
+            return None
+        res = naver_session.session.post(
+            "https://learn.dict.naver.com/api/pronunLink.dict",
+            data={"filePath": self.pron_file, "dmain": "naver"},
+        )
+        res_json = json.loads(res.text)
+        return res_json["data"]["pronunLinkList"][0]
 
     @staticmethod
     def get_words_response(
@@ -68,6 +83,7 @@ class NaverVocab:
         )["data"]["over_last_page"] is False:
             words += [
                 NaverVocab(
+                    id=item["id"],
                     **get_entry_dict(book.book_type, json.loads(item["content"])),
                 )
                 for item in response["data"]["m_items"]

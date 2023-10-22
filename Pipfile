@@ -26,6 +26,7 @@ wsproto = "==1.0.0"
 chromedriver-autoinstaller = "*"
 chromedriver-autoinstaller-fix = "*"
 inquirer = "*"
+tqdm = "*"
 
 [dev-packages]
 black = "*"

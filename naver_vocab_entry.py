@@ -124,6 +124,24 @@ def get_pron(book_type: "NaverVocabBook.Type", member: NaverVocabEntryResponseMe
             raise NotImplementedError
 
 
+def get_pron_file(
+    book_type: "NaverVocabBook.Type", member: NaverVocabEntryResponseMember
+):
+    from naver_vocab_book import NaverVocabBook
+
+    pron = member["prons"][0]
+
+    match book_type:
+        case NaverVocabBook.Type.JAKO:
+            return None
+
+        case NaverVocabBook.Type.ZHKO:
+            return pron["male_pron_file"] or pron["female_pron_file"] or None
+
+        case _:
+            raise NotImplementedError
+
+
 def get_valid_mean(means: list[NaverVocabEntryResponseEntryMean]):
     return next(mean for mean in means if mean["show_mean"] != "")
 
@@ -132,6 +150,7 @@ class NaverVocabEntryDict(TypedDict):
     word: str
     meaning: str
     pron: str
+    pron_file: str | None
     remarks: str | None
 
 
@@ -145,5 +164,6 @@ def get_entry_dict(
         word=get_word(book_type, member),
         meaning=get_meaning(book_type, mean),
         pron=get_pron(book_type, member),
+        pron_file=get_pron_file(book_type, member),
         remarks=None,
     )
