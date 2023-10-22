@@ -16,7 +16,7 @@ class NaverVocabEntryResponseMemberPron(TypedDict):
     korean_pron_symbol: str
     order_seq: int
     male_pron_file: str
-    femail_pron_file: str
+    female_pron_file: str
 
 
 class NaverVocabEntryResponseMember(TypedDict):
