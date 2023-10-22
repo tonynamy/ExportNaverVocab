@@ -1,5 +1,5 @@
 import functools
-from typing import TYPE_CHECKING, NamedTuple, TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 import utils
 from utils import RegexPattern
@@ -128,20 +128,20 @@ def get_valid_mean(means: list[NaverVocabEntryResponseEntryMean]):
     return next(mean for mean in means if mean["show_mean"] != "")
 
 
-class NaverVocabEntryTuple(NamedTuple):
+class NaverVocabEntryDict(TypedDict):
     word: str
     meaning: str
     pron: str
-    remarks: str | None = None
+    remarks: str | None
 
 
-def get_entry_tuple(
+def get_entry_dict(
     book_type: "NaverVocabBook.Type", entry_dict: NaverVocabEntryResponse
 ):
     member = entry_dict["entry"]["members"][0]
     mean = get_valid_mean(entry_dict["entry"]["means"])
 
-    return NaverVocabEntryTuple(
+    return NaverVocabEntryDict(
         word=get_word(book_type, member),
         meaning=get_meaning(book_type, mean),
         pron=get_pron(book_type, member),

@@ -1,8 +1,9 @@
 from dataclasses import dataclass
 import json
 from typing import TYPE_CHECKING, TypedDict, cast
+
 from naver_session import NaverSession
-from naver_vocab_entry import get_entry_tuple
+from naver_vocab_entry import get_entry_dict
 
 if TYPE_CHECKING:
     from naver_vocab_book import NaverVocabBook
@@ -67,17 +68,9 @@ class NaverVocab:
         )["data"]["over_last_page"] is False:
             words += [
                 NaverVocab(
-                    word=word,
-                    meaning=meaning,
-                    pron=pron,
-                    remarks=remarks,
+                    **get_entry_dict(book.book_type, json.loads(item["content"])),
                 )
-                for word, meaning, pron, remarks in map(
-                    lambda item: get_entry_tuple(
-                        book.book_type, json.loads(item["content"])
-                    ),
-                    response["data"]["m_items"],
-                )
+                for item in response["data"]["m_items"]
             ]
 
             cursor = response["data"]["next_cursor"]
