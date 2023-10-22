@@ -1,435 +1,139 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-
 import csv
-import getpass
-import json
-import os
-import re
-import time
-from urllib.parse import quote_plus, unquote
+import inquirer
 
-import chromedriver_autoinstaller
-import requests
-from selenium import webdriver
-from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
+from naver_session import NaverSession
+from naver_vocab import NaverVocab
+from naver_vocab_book import NaverVocabBook
 
-CHROMEDRIVER_PATH = "./chromedriver/"
 
-# as per recommendation from @freylis, compile once only
-RE_HTML = re.compile(r"<.*?>")
-RE_PARENTHESIS = re.compile(r"\((?:[^)(]|\([^)(]*\))*\)")
-RE_BRACKET = re.compile(r"\[(?:[^\]\[]|\[[^\]\[]*\])*\]")
-RE_PARENTHESIS_HANGUL = re.compile(r"\(([ㄱ-ㅎ가-힣ㅏ-ㅣ\s]+)\)")
-RE_HANGUL = re.compile(r"[가-힣]+")
+def inquire_is_session_load() -> bool:
+    questions = [inquirer.Confirm("is_session_load", message="세션을 불러오시겠습니까?")]
+    answers = inquirer.prompt(questions)
+    return answers["is_session_load"]
 
-RE_KANJI = re.compile("[\u4E00-\u9FFF\s]+")
-RE_HIRA = re.compile("[\u3040-\u309Fー\s]+")
-RE_KATA = re.compile("[\u30A0-\u30FF\s]+")
-RE_JAPANESE = re.compile("[\u3040-\u30FF\u30A0-\u30FFー\s]+")
-RE_HIRA_KATA = re.compile("[\u3040-\u30FFー\s]+")
 
+def inquire_is_session_save() -> bool:
+    questions = [inquirer.Confirm("is_session_save", message="세션을 저장하시겠습니까?")]
+    answers = inquirer.prompt(questions)
+    return answers["is_session_save"]
 
-def clean_html(raw):
-    cleantext = re.sub(RE_HTML, "", raw)
-    return cleantext
 
+def inquire_sesion_file_path() -> str:
+    questions = [inquirer.Path("session_file_path", message="세션 파일 경로를 입력하세요")]
+    answers = inquirer.prompt(questions)
+    return answers["session_file_path"]
 
-def clean_parenthesis(raw):
-    while True:
-        output = re.sub(RE_PARENTHESIS, "", raw)
-        if output == raw:
-            break
-        raw = output
 
-    while True:
-        output = re.sub(RE_BRACKET, "", raw)
-        if output == raw:
-            break
-        raw = output
+def inquire_username_and_password() -> tuple[str, str]:
+    questions = [
+        inquirer.Text("username", message="네이버 아이디를 입력하세요"),
+        inquirer.Password("password", message="네이버 비밀번호를 입력하세요"),
+    ]
+    answers = inquirer.prompt(questions)
+    return answers["username"], answers["password"]
 
-    output = output.replace("'", "")
-    output = output.replace('"', "")
-    output = output.replace("‘", "")
-    output = output.replace("’", "")
 
-    return output
+def inquire_book_type() -> NaverVocabBook.Type:
+    questions = [
+        inquirer.List(
+            "book_type",
+            message="사전을 선택하세요",
+            choices=[
+                ("일한사전", NaverVocabBook.Type.JAKO),
+                ("중한사전", NaverVocabBook.Type.ZHKO),
+            ],
+        ),
+    ]
+    answers = inquirer.prompt(questions)
+    return NaverVocabBook.Type(answers["book_type"])
 
 
-def clean_parenthesis_hangul(raw):
-    cleantext = re.sub(RE_PARENTHESIS_HANGUL, "", raw)
-    return cleantext
+def inquire_book_id(books: list[NaverVocabBook]) -> str:
+    questions = [
+        inquirer.List(
+            "book_id",
+            message="단어장을 선택하세요",
+            choices=[(book.book_name, book.book_id) for book in books],
+        ),
+    ]
+    answers = inquirer.prompt(questions)
+    return answers["book_id"]
 
 
-def get_only_hangul(raw):
-    return "".join(re.findall(RE_HANGUL, raw))
+def inquire_csv_file_path() -> str:
+    questions = [inquirer.Path("csv_file_path", message="CSV 파일 경로를 입력하세요")]
+    answers = inquirer.prompt(questions)
+    return answers["csv_file_path"]
 
 
-def get_only_hira_kata(raw):
-    return "".join(re.findall(RE_HIRA_KATA, raw))
+def inquire_quit() -> bool:
+    questions = [inquirer.Confirm("quit", message="종료하시겠습니까?")]
+    answers = inquirer.prompt(questions)
+    return answers["quit"]
 
 
-def get_only_japanese(raw):
-    return "".join(re.findall(RE_JAPANESE, raw))
-
-
-def get_first_item(raw):
-    return raw.split(";")[0].split(",")[0].split(".")[0].split("·")[0].strip()
-
-
-def get_driver() -> webdriver.Chrome:
-    driver_path = chromedriver_autoinstaller.install(path=CHROMEDRIVER_PATH)
-    return webdriver.Chrome(service=Service(executable_path=driver_path))
-
-
-def get_naver_login_session(username, password, session_save, session_load):
-    if not session_load:
-        driver = get_driver()
-        driver.get("https://nid.naver.com/nidlogin.login")
-
-        timeout = 5
-        try:
-            element_present = EC.presence_of_element_located((By.ID, "id"))
-            WebDriverWait(driver, timeout).until(element_present)
-        except TimeoutException:
-            print
-            "Timed out waiting for page to load"
-
-        driver.find_element(By.ID, "id").send_keys(username)
-        driver.find_element(By.ID, "pw").send_keys(password)
-        driver.find_element(By.ID, "log.login").click()
-
-        wait = WebDriverWait(driver, 600)
-        wait.until(lambda driver: "https://nid.naver.com/" not in driver.current_url)
-
-        cookies = driver.get_cookies()
-
-        if session_save:
-            with open("session_info", mode="w") as f:
-                f.write(json.dumps(cookies))
-    else:
-        with open("session_info", mode="r") as f:
-            cookies = json.loads(f.read())
-
-    s = requests.Session()
-
-    for cookie in cookies:
-        s.cookies.set(cookie["name"], cookie["value"])
-
-    return s
-
-
-def get_vocab_lists(session, page, page_size=100):
-    vocab_lists_text = session.get(
-        f"https://learn.dict.naver.com/gateway-api/jakodict/mywordbook/wordbook/list.dict?page={page}&page_size={page_size}&st=0&domain=naver"
-    )
-
-    result = json.loads(vocab_lists_text.text)
-
-    if result["meta"]["status"] != 1:
-        raise Exception("단어장 목록 받아오기 실패")
-
-    vocab_lists = result["data"]["m_items"]
-
-    vocab_list_dict = {}
-
-    for vocab_list in vocab_lists:
-        vocab_list_dict[vocab_list["name"]] = (
-            vocab_list["id"],
-            vocab_list["wordCount"],
-        )
-
-    return vocab_list_dict
-
-
-def get_vocabs(session, vocab_list_id, start, count, search_size=100):
-    words = []
-
-    fisrt_page = start // 100
-    if fisrt_page == 0:
-        fisrt_page = 1
-
-    total_page = (start + count + 100) // 100
-    if total_page == 0:
-        total_page = 1
-
-    page = fisrt_page
-    cursor = ""
-
-    vocab_count = 0
-
-    while page <= total_page:
-        if page == 1:
-            link = f"https://learn.dict.naver.com/gateway-api/jakodict/mywordbook/word/list/search?wbId={vocab_list_id}&qt=0&st=0&page_size={search_size}&domain=naver"
-        else:
-            link = f"https://learn.dict.naver.com/gateway-api/jakodict/mywordbook/word/list/search?wbId={vocab_list_id}&qt=0&st=0&cursor={cursor}&page_size={search_size}&domain=naver"
-
-        result = json.loads(session.get(link).text)
-
-        if result["meta"]["status"] != 1:
-            print(f"{page} 페이지 파싱 결과 : 단어장 불러오기 실패")
-            print(result)
-            time.sleep(1)
-            page += 1
-            continue
-
-        vocabs = result["data"]["m_items"]
-        cursor = quote_plus(result["data"]["next_cursor"])
-
-        vocab_success_count = 0
-
-        for vocab in vocabs:
-            vocab_count += 1
-
-            if vocab_count < start:
-                continue
-
-            word, meaning = process_vocab(vocab)
-
-            if word == None or meaning == None:
-                continue
-
-            vocab_success_count += 1
-
-            words.append((word, meaning))
-
-            if vocab_count >= count + start - 1:
-                break
-
-        if vocab_count >= count + start - 1:
-            break
-
-        print(f"{page} 페이지 파싱 결과 : {vocab_success_count}/{search_size} 개 불러옴")
-
-        time.sleep(1)
-
-        page += 1
-
-    return words
-
-
-def get_entry(element):
+def get_session():
     try:
-        element = element["entry"]
-        lang = element["language"]
+        if inquire_is_session_load():
+            session_file_path = inquire_sesion_file_path()
+            return NaverSession.from_file(session_file_path)
 
-        if lang == "ja":  # 일어
-            kanji, word = get_word(element["members"])
-            meaning = get_mean(element["means"])
+    except FileNotFoundError:
+        print("세션 파일을 찾지 못했습니다. 로그인을 진행합니다.")
 
-            return kanji, word, meaning
+    if inquire_is_session_save():
+        session_file = inquire_sesion_file_path()
 
-        return None, None, None
+    username, password = inquire_username_and_password()
+    session = NaverSession.login(username, password)
+    session.save(session_file)
 
-    except Exception as e:
-        return None, None, None
-
-
-def get_word(elements):
-    kanji = None
-    entry_name = None
-
-    for element in elements:
-        entry_name = element["entry_name"]
-        entry_name = clean_parenthesis(entry_name)
-        entry_name = clean_html(entry_name)
-        entry_name = get_first_item(entry_name)
-        entry_name = get_only_hira_kata(entry_name)
-
-        kanji = element["kanji"]
-        kanji = clean_parenthesis(kanji)
-        kanji = clean_html(kanji)
-        kanji = get_first_item(kanji)
-
-        if entry_name == "":
-            entry_name = None
-        if kanji == "":
-            kanji = None
-
-        if entry_name is not None:
-            break
-
-    return kanji, entry_name
+    return session
 
 
-def get_mean(elements):
-    mean = None
+def _get_front_and_back(
+    book_type: NaverVocabBook.Type, vocab: NaverVocab
+) -> tuple[str, str]:
+    match book_type:
+        case NaverVocabBook.Type.JAKO:
+            return (vocab.word, f"{vocab.pron}<br/>{vocab.meaning}")
 
-    for element in elements:
-        mean = element["show_mean"]
-        mean = clean_parenthesis(mean)
-        mean = clean_html(mean)
-        mean = get_first_item(mean)
+        case NaverVocabBook.Type.ZHKO:
+            return (vocab.word, f"{vocab.pron}<br/>{vocab.meaning}")
 
-        if mean == "":
-            mean = None
-
-        if mean is not None:
-            break
-
-    return mean
-
-
-def process_vocab(vocab):
-    if not isinstance(vocab, dict):
-        return None, None
-
-    dic_type = vocab["dicType"]
-
-    if dic_type == "jako":  # 일한 사전
-        kanji, word, meaning = get_entry(json.loads(unquote(vocab["content"])))
-
-        if word is None or meaning is None:
-            return None, None
-
-        if kanji is not None:
-            meaning = word + " " + meaning
-            word = kanji
-
-        return word, meaning
-
-    elif dic_type == "koja":  # 한일 사전, 지원 X
-        return None, None
-
-    return None, None
-
-
-def export_to_file(file_name, vocabs):
-    with open(file_name, "w", newline="", encoding="utf-8-sig") as f:
-        wr = csv.writer(f)
-
-        for word, meaning in vocabs:
-            wr.writerow([word, meaning])
-
-        f.close()
+        case _:
+            raise NotImplementedError
 
 
 def main():
-    username = input("네이버 아이디 : ")
-    password = getpass.getpass("네이버 비밀번호 : ")
+    session = get_session()
 
-    session_load = input("세션을 불러올까요? (y or n) ")
+    while True:
+        book_type = inquire_book_type()
 
-    if session_load == "y":
-        session_load = True
-    else:
-        session_load = False
+        books = NaverVocabBook.get_book_list(session, book_type)
 
-    session_save = False
+        book_id = inquire_book_id(books)
 
-    if not session_load:
-        session_save = input("세션을 저장할까요? (y or n) ")
+        selected_book = NaverVocabBook.get_book_from_id(session, book_id, book_type)
+        selected_book.load_vocabs(session)
 
-        if session_save == "y":
-            session_save = True
-        else:
-            session_save = False
+        csv_file_path = inquire_csv_file_path()
 
-    session = get_naver_login_session(username, password, session_save, session_load)
+        with open(csv_file_path, "w", encoding="utf8") as f:
+            vocabs = selected_book.vocabs
+            assert vocabs
 
-    command = ""
+            wr = csv.writer(f)
 
-    while command != "q":
-        vocabs = []
+            for vocab in vocabs:
+                wr.writerow(_get_front_and_back(book_type, vocab))
 
-        while True:
-            vocab_lists_page = 1
-            vocab_lists_select = 0
-            vocab_list_items = []
+        print(f"{len(vocabs)}개 단어를 {csv_file_path}에 저장했습니다.")
 
-            print()
-            print(f"현재 {len(vocabs)}개의 단어를 불러왔습니다.")
-
-            while vocab_lists_select <= 0:
-                vocab_lists = get_vocab_lists(session, vocab_lists_page)
-
-                vocab_list_items = list(vocab_lists.items())
-
-                print()
-
-                print(f"단어장 목록 {vocab_lists_page} 페이지")
-
-                print()
-
-                for idx, vocab_list_item in enumerate(vocab_list_items):
-                    print(
-                        f"{idx+1} : {vocab_list_item[0]} ({vocab_list_item[1][1]}개 단어)"
-                    )
-
-                print()
-
-                vocab_lists_select = int(
-                    input(
-                        "단어장을 선택하거나 전 페이지를 검색하려면 -1, 다음 페이지를 검색하려면 0을 입력하십시오(종료는 -2) : "
-                    )
-                )
-
-                if vocab_lists_select == -1:
-                    if vocab_lists_page <= 1:
-                        print()
-                        print("이미 첫 페이지입니다.")
-
-                        vocab_lists_page = 1
-
-                    else:
-                        vocab_lists_page -= 1
-
-                elif vocab_lists_select == 0:
-                    vocab_lists_page += 1
-
-                else:
-                    break
-
-            if vocab_lists_select == -2:
-                break
-
-            # print()
-            # print(f"선택한 단어장 : {vocab_list_items[vocab_lists_select-1][0]}  ({vocab_list_items[vocab_lists_select-1][1][1]}개 단어)")
-
-            # vocab_start_count = int(input("불러오기 시작할 단어의 수를 입력하세요 : "))
-            # vocab_count = int(input("불러올 단어 개수를 입력하세요 : "))
-
-            vocab_lists_id = vocab_list_items[vocab_lists_select - 1][1][0]
-
-            _vocabs = get_vocabs(
-                session,
-                vocab_lists_id,
-                0,
-                vocab_list_items[vocab_lists_select - 1][1][1],
-            )
-            vocabs.extend(_vocabs)
-            print()
-
-            print(
-                f"{vocab_list_items[vocab_lists_select - 1][0]} 단어장에서 {len(_vocabs)}개를 불러와 추가했습니다."
-            )
-
-        print(f"{len(vocabs)}개의 단어를 저장합니다.")
-        print()
-        vocab_unit = int(input("한 번에 저장할 단어 개수를 입력하세요 : "))
-        file_original_name = input("저장할 파일 이름을 입력하세요 : ")
-
-        for i in range(0, len(vocabs), vocab_unit):
-            file_name = f"{file_original_name}-{i//vocab_unit + 1}.csv"
-
-            if i + vocab_unit > len(vocabs):
-                end_index = len(vocabs)
-            else:
-                end_index = i + vocab_unit
-
-            vocabs_by_unit = vocabs[i:end_index]
-
-            export_to_file(file_name, vocabs_by_unit)
-
-            print(f"{file_name}에 {end_index-i}개의 단어를 저장했습니다.")
-
-        print("")
-        print("작업이 완료되었습니다.")
-        command = input("종료하려면 q를, 단어장 선택 화면으로 돌아가려면 q를 제외한 다른 키를 누르십시오.")
+        if inquire_quit():
+            break
 
 
-main()
+if __name__ == "__main__":
+    main()
