@@ -32,12 +32,15 @@ def inquire_is_download_pron_files():
     return inquire_bool("발음 파일을 다운로드하시겠습니까? (CSV의 세번째 열에 저장된 파일의 경로가 추가됩니다(ANKI에서 사용))")
 
 
-def inquire_path(message: str) -> Path:
+def inquire_path(message: str, is_directory: bool = False) -> Path:
     questions = [inquirer.Path("path", message=message)]
     answers = inquirer.prompt(questions)
     path = Path(answers["path"])
-    if not path.exists():
-        path.mkdir(parents=True, exist_ok=True)
+
+    if is_directory:
+        if not path.exists():
+            path.mkdir(parents=True, exist_ok=True)
+
     return path
 
 
@@ -50,7 +53,7 @@ def inquire_csv_file_path():
 
 
 def inquire_pron_folder_path():
-    return inquire_path("발음 파일 폴더 경로를 입력하세요")
+    return inquire_path("발음 파일 폴더 경로를 입력하세요", is_directory=True)
 
 
 def inquire_username_and_password() -> tuple[str, str]:
