@@ -71,6 +71,7 @@ def inquire_book_type() -> NaverVocabBook.Type:
             "book_type",
             message="사전을 선택하세요",
             choices=[
+                ("영한사전", NaverVocabBook.Type.ENKO),
                 ("일한사전", NaverVocabBook.Type.JAKO),
                 ("중한사전", NaverVocabBook.Type.ZHKO),
             ],
@@ -129,7 +130,7 @@ def _get_front_and_back(
     book_type: NaverVocabBook.Type, vocab: NaverVocab
 ) -> tuple[str, str]:
     match book_type:
-        case NaverVocabBook.Type.JAKO:
+        case NaverVocabBook.Type.JAKO | NaverVocabBook.Type.ENKO:
             return (vocab.word, f"{vocab.meaning}")
 
         case NaverVocabBook.Type.ZHKO:

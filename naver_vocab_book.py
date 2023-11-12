@@ -31,6 +31,7 @@ class NaverVocabBook:
     class Type(enum.StrEnum):
         JAKO = "jakodict"  # 일한사전
         ZHKO = "zhkodict"  # 중한사전
+        ENKO = "enkodict"  # 영한사전
 
     book_id: str
     book_name: str

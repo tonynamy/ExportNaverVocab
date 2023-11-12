@@ -66,7 +66,7 @@ def get_word(book_type: "NaverVocabBook.Type", member: NaverVocabEntryResponseMe
 
             return word
 
-        case NaverVocabBook.Type.ZHKO:
+        case NaverVocabBook.Type.ZHKO | NaverVocabBook.Type.ENKO:
             return member["entry_name"]
 
         case _:
@@ -90,7 +90,7 @@ def get_meaning(
 
             return utils.get_first_item(cleaned)
 
-        case NaverVocabBook.Type.ZHKO:
+        case NaverVocabBook.Type.ZHKO | NaverVocabBook.Type.ENKO:
             return mean["show_mean"]
 
         case _:
@@ -120,8 +120,8 @@ def get_pron(book_type: "NaverVocabBook.Type", member: NaverVocabEntryResponseMe
             pron = member["prons"][0]
             return pron["pron_symbol"]
 
-        case _:
-            raise NotImplementedError
+        case NaverVocabBook.Type.ENKO:
+            return ""
 
 
 def get_pron_file(
@@ -132,7 +132,7 @@ def get_pron_file(
     pron = member["prons"][0]
 
     match book_type:
-        case NaverVocabBook.Type.JAKO:
+        case NaverVocabBook.Type.JAKO | NaverVocabBook.Type.ENKO:
             return None
 
         case NaverVocabBook.Type.ZHKO:
