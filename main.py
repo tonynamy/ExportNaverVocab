@@ -130,7 +130,7 @@ def _get_front_and_back(
 ) -> tuple[str, str]:
     match book_type:
         case NaverVocabBook.Type.JAKO:
-            return (vocab.word, f"{vocab.pron}<br/>{vocab.meaning}")
+            return (vocab.word, f"{vocab.meaning}")
 
         case NaverVocabBook.Type.ZHKO:
             return (vocab.word, f"{vocab.pron}<br/>{vocab.meaning}")
